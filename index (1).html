@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EVA – Lecteur de replays</title>
+<style>
+:root{color-scheme:dark;--bg:#101318;--panel:#1a2029;--panel2:#242d39;--line:#354151;--text:#f3f6fa;--muted:#aab5c3;--accent:#3997f5;--green:#62d6a3;--red:#ff7c85}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Arial,sans-serif}
+header{padding:15px 20px;background:#151a22;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:11px}.logo{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#2586ee,#7857d8);display:grid;place-items:center;font-weight:900;font-size:19px}
+h1{font-size:17px;margin:0}.sub,.muted,.status,.help{color:var(--muted);font-size:12px}
+main{max-width:1800px;margin:auto;padding:16px}button,input,select,textarea{font:inherit}
+button{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:8px;padding:9px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}button:disabled{opacity:.4;cursor:not-allowed}
+.primary{background:#176dc2;border-color:#318be0}.danger{border-color:#744047;color:#ffb6bb}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.toprow,.toolbar,.controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.spacer{flex:1}
+.selector label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}
+select,input,textarea{background:#0e1218;border:1px solid var(--line);border-radius:8px;color:var(--text);padding:9px}
+#recordingSelect{min-width:min(420px,75vw);max-width:100%}
+.status.good{color:var(--green)}.status.bad{color:#ff9ca3}
+.toolbar{margin-top:12px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.tile{min-width:0;background:#050608;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tilehead{min-height:34px;background:#1a2029;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;font-size:11px}
+.tilehead button{font-size:11px;padding:3px 8px}.tile-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.playerbox{width:100%;aspect-ratio:16/9;background:#050608}.playerbox>div,.playerbox iframe{width:100%;height:100%;border:0}
+.tile.active{border:2px solid var(--accent)}.sound{color:var(--green);font-weight:700;white-space:nowrap}
+.grid.focus{grid-template-columns:minmax(0,1fr)}.grid.focus .tile{display:none}.grid.focus .tile.active{display:block}
+.grid.focus .tile.active .playerbox{height:min(78vh,1000px);aspect-ratio:auto}.grid.focus .tile.active .playerbox>div,.grid.focus .tile.active iframe{height:100%}
+/* Plein écran : colonnes / taille calculées dynamiquement en JS (layoutFullscreen) selon le nombre de vidéos et l'écran */
+.grid:fullscreen,.grid.focus:fullscreen{position:relative;width:100vw;height:100vh;overflow:hidden;padding:var(--fs-pad,10px);padding-bottom:86px;gap:var(--fs-gap,8px);background:var(--bg);border:0;border-radius:0;grid-template-columns:repeat(var(--fs-cols,1),var(--fs-w,minmax(0,1fr)));justify-content:center;align-content:center}
+.grid:fullscreen .playerbox,.grid.focus:fullscreen .tile.active .playerbox{height:var(--fs-vh,auto);aspect-ratio:auto;max-height:none}
+.grid:fullscreen .tilehead{font-size:13px}
+.fullscreen-controls{display:none}
+.grid:fullscreen .fullscreen-controls{position:fixed;display:flex;align-items:center;gap:9px;left:0;right:0;bottom:0;z-index:2147483647;padding:12px 16px;background:rgba(21,26,34,.98);border-top:1px solid var(--line);box-shadow:0 -5px 18px rgba(0,0,0,.35);pointer-events:auto;isolation:isolate}
+.grid:fullscreen .fullscreen-controls *{pointer-events:auto;position:relative;z-index:1}
+.grid:fullscreen .fullscreen-controls input[type=range]{touch-action:none;cursor:pointer}
+.fullscreen-controls .timeline{flex:1;min-width:180px}
+.fullscreen-controls input{min-width:50px}
+@media(max-width:650px){.grid:fullscreen{padding-bottom:112px}.grid:fullscreen .fullscreen-controls{flex-wrap:wrap;padding:8px}.fullscreen-controls .timeline{flex-basis:100%;order:2}}
+.grid:fullscreen .tilehead button{font-size:12px;padding:5px 10px}
+.timeline{display:flex;align-items:center;gap:9px;width:100%}.timeline input{flex:1;min-width:80px;accent-color:var(--accent)}
+.time{min-width:78px;text-align:center;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.help{margin:10px 2px;line-height:1.6}
+.record-editor{border:1px solid var(--line);border-radius:10px;padding:12px;margin:12px 0;background:#141a22}
+.record-editor-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.record-editor-head input{flex:1;min-width:120px}
+.video-row{display:grid;grid-template-columns:minmax(110px,180px) minmax(180px,1fr) auto;gap:8px;margin:7px 0}
+.config-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:35px 15px;text-align:center;color:var(--muted)}
+@media(max-width:1150px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){main{padding:9px}header{padding:12px}.grid{grid-template-columns:1fr}.video-row{grid-template-columns:1fr}.record-editor-head{flex-wrap:wrap}#recordingSelect{min-width:0;width:100%}}
+</style>
+</head>
+<body>
+<header>
+ <div class="brand"><div class="logo">E</div><div><h1>EVA · Bibliothèque de replays</h1><div class="sub">Lecteur multi-vidéos YouTube · consultation uniquement</div></div></div>
+ <span class="sub">Consultation des replays</span>
+</header>
+<main>
+<section class="panel selector">
+  <label for="recordingSelect">CHOISIR UN ENREGISTREMENT</label>
+  <div class="toprow">
+   <select id="recordingSelect" disabled><option>Chargement…</option></select>
+   <span class="spacer"></span><span id="videoCount" class="muted"></span>
+  </div>
+ </section>
+
+ <section class="panel toolbar">
+  <button id="start" class="primary" disabled>▶ Démarrer</button>
+  <button id="pause" disabled>Ⅱ Pause générale</button>
+  <button id="stop" disabled>■ Arrêter</button>
+  <button id="mosaic" disabled>▦ Retour mosaïque</button>
+  <button id="fullscreenMosaic" disabled>⛶ Plein écran mosaïque</button>
+  <span class="spacer"></span><span id="status" class="status">Chargement de la bibliothèque…</span>
+ </section>
+ <section class="panel controls">
+  <label for="audioSelect">🔊 Son :</label>
+  <select id="audioSelect" disabled><option value="-1">Aucun</option></select>
+  <span class="spacer"></span><span class="muted">Clique sur une vidéo pour l'agrandir.</span>
+ </section>
+ <section id="grid" class="grid" aria-label="Vidéos de l'enregistrement"></section>
+ <section class="panel controls" style="margin-top:12px">
+  <div class="timeline"><button id="back" disabled>−5 s</button><span id="current" class="time">00:00:00</span><input id="seek" type="range" min="0" max="1000" value="0" disabled><span id="duration" class="time">00:00:00</span><button id="forward" disabled>+5 s</button></div>
+ </section>
+ <p class="help">Les vidéos sont diffusées par YouTube. Les lecteurs peuvent afficher des éléments YouTube ou des publicités. Une vidéo non répertoriée n'est pas privée : toute personne ayant son lien peut la regarder. La synchronisation reste approximative et dépend du chargement réseau de chaque vidéo.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const API_URL='./videos.json';
+let library=[],currentRecording=-1,players=[],ready=0,activeTile=-1,audio=-1,syncTimer=null,seeking=false,apiReady=false,recordingDuration=0;
+const grid=$('grid'),statusEl=$('status'),audioSelect=$('audioSelect');
+function say(message,kind=''){statusEl.textContent=message;statusEl.className='status '+kind}
+function fmt(value){let s=Math.max(0,Math.floor(Number(value)||0));return [Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(x=>String(x).padStart(2,'0')).join(':')}
+function extractVideoId(raw){try{let u=new URL(String(raw).trim()),host=u.hostname.toLowerCase(),parts=u.pathname.split('/').filter(Boolean);if(host==='youtu.be'||host.endsWith('.youtu.be'))return parts[0]||null;if(host.includes('youtube.com')){if(u.pathname==='/watch')return u.searchParams.get('v');if(['embed','shorts','live','v'].includes(parts[0]))return parts[1]||null}}catch(e){}return null}
+function normalizeLibrary(data){
+ let records=Array.isArray(data)?data:(data&&Array.isArray(data.recordings)?data.recordings:[]);
+ return records.map((r,i)=>({title:String(r.title||`Enregistrement ${i+1}`),videos:(Array.isArray(r.videos)?r.videos:[]).map((v,j)=>typeof v==='string'?{name:`Caméra ${j+1}`,url:v}:{name:String(v.name||`Caméra ${j+1}`),url:String(v.url||'')}).filter(v=>v.url.trim())})).filter(r=>r.videos.length>0);
+}
+function destroyPlayers(){stopSync();players.forEach(p=>{try{if(p&&p.destroy)p.destroy()}catch(e){}});players=[];ready=0;audio=-1;activeTile=-1;grid.classList.remove('focus');$('mosaic').disabled=true;$('fullscreenMosaic').disabled=true;audioSelect.innerHTML='<option value="-1">Aucun</option>';audioSelect.disabled=true;setPlaybackControls(false);const fsSeek=grid.querySelector('.fullscreen-controls [data-seek]');if(fsSeek){fsSeek.disabled=true;fsSeek.value=0;fsSeek.max=1;}$('current').textContent='00:00:00';$('duration').textContent='00:00:00';$('seek').value=0;$('seek').max=1000}
+function setPlaybackControls(enabled){['start','pause','stop','seek','back','forward'].forEach(id=>$(id).disabled=!enabled)}
+function renderRecordingMenu(){
+ const sel=$('recordingSelect');sel.innerHTML='';
+ if(!library.length){sel.disabled=true;let o=document.createElement('option');o.textContent='Aucun enregistrement disponible';sel.append(o);$('videoCount').textContent='';return}
+ library.forEach((r,i)=>{let o=document.createElement('option');o.value=i;o.textContent=r.title;sel.append(o)});
+ sel.disabled=false;if(currentRecording<0||currentRecording>=library.length)currentRecording=0;sel.value=String(currentRecording);
+}
+function showEmpty(message){grid.innerHTML='';let e=document.createElement('div');e.className='empty';e.textContent=message;grid.append(e);$('videoCount').textContent=''}
+function buildTiles(recording){
+ grid.innerHTML='';
+ recording.videos.forEach((v,i)=>{
+  const tile=document.createElement('article');tile.className='tile';tile.id=`tile-${i}`;
+  const head=document.createElement('div');head.className='tilehead';
+  const name=document.createElement('span');name.className='tile-name';name.textContent=v.name||`Caméra ${i+1}`;
+  const right=document.createElement('span');right.style.display='flex';right.style.gap='7px';right.style.alignItems='center';
+  const sound=document.createElement('span');sound.className='sound';sound.id=`sound-${i}`;
+  const enlarge=document.createElement('button');enlarge.textContent='Agrandir';enlarge.onclick=()=>focusTile(i);
+  right.append(sound,enlarge);head.append(name,right);
+  const box=document.createElement('div');box.className='playerbox';const mount=document.createElement('div');mount.id=`yt-${i}`;box.append(mount);tile.append(head,box);grid.append(tile);
+ });
+}
+function focusTile(i){activeTile=i;grid.classList.add('focus');document.querySelectorAll('.tile').forEach((el,n)=>el.classList.toggle('active',n===i));$('mosaic').disabled=false;layoutFullscreen()}
+function showMosaic(){grid.classList.remove('focus');document.querySelectorAll('.tile').forEach(el=>el.classList.remove('active'));activeTile=-1;layoutFullscreen()}
+
+function ensureFullscreenControls(){
+ let bar=grid.querySelector('.fullscreen-controls');
+ if(bar)return bar;
+ bar=document.createElement('div');bar.className='fullscreen-controls';
+ bar.innerHTML=`<button type="button" class="primary" data-action="play">▶ Lecture</button>
+ <button type="button" data-action="pause">Ⅱ Pause</button>
+ <div class="timeline"><span class="time" data-current>00:00:00</span>
+ <input data-seek type="range" min="0" max="1000" value="0" disabled>
+ <span class="time" data-duration>00:00:00</span></div>`;
+ bar.querySelector('[data-action="play"]').onclick=playAll;
+ bar.querySelector('[data-action="pause"]').onclick=pauseAll;
+ const range=bar.querySelector('[data-seek]');
+ range.oninput=()=>{if(range.disabled)return;seeking=true;bar.querySelector('[data-current]').textContent=fmt(range.value)};
+ const commitSeek=()=>{if(range.disabled||!seeking)return;const target=Number(range.value);seeking=false;seekAll(target)};
+ range.addEventListener('change',commitSeek);
+ range.addEventListener('pointerup',commitSeek);
+ range.addEventListener('touchend',commitSeek,{passive:true});
+ range.addEventListener('keyup',e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key))commitSeek()});
+ grid.append(bar);
+ return bar;
+}
+function updateFullscreenTimeline(current,duration){
+ const bar=grid.querySelector('.fullscreen-controls');if(!bar)return;
+ const range=bar.querySelector('[data-seek]');
+ if(duration>0){range.max=Math.floor(duration);bar.querySelector('[data-duration]').textContent=fmt(duration)}
+ if(!seeking){range.value=Math.floor(current);bar.querySelector('[data-current]').textContent=fmt(current)}
+}
+
+function createPlayers(){
+ destroyPlayers();
+ if(!apiReady)return;
+ const rec=library[currentRecording];if(!rec||!rec.videos.length){showEmpty('Aucune vidéo dans cet enregistrement.');return}
+ const ids=rec.videos.map(v=>extractVideoId(v.url));
+ const invalid=ids.findIndex(id=>!id);
+ if(invalid!==-1){say(`Lien YouTube invalide pour « ${rec.videos[invalid].name||`Caméra ${invalid+1}`} ». Corrige videos.json.`,'bad');showEmpty('Un lien YouTube semble invalide.');return}
+ buildTiles(rec);ensureFullscreenControls();$('fullscreenMosaic').disabled=false;players=new Array(ids.length).fill(null);say(`Chargement de ${ids.length} vidéo(s)…`);
+ ids.forEach((id,i)=>{
+  players[i]=new YT.Player(`yt-${i}`,{width:'100%',height:'100%',videoId:id,playerVars:{autoplay:0,controls:1,playsinline:1,rel:0,enablejsapi:1,origin:location.origin},events:{
+   onReady:()=>{players[i].mute();players[i].setVolume(0);ready++;if(ready===ids.length)allPlayersReady()},
+   onError:e=>say(`Erreur YouTube sur ${rec.videos[i].name||`Caméra ${i+1}`} (code ${e.data}). Vérifie les droits et l'autorisation d'intégration.`,'bad')
+  }});
+ });
+ $('videoCount').textContent=`${ids.length} vidéo${ids.length>1?'s':''}`;
+}
+function allPlayersReady(){
+ const count=players.length;setPlaybackControls(true);audioSelect.disabled=false;audioSelect.innerHTML='<option value="-1">Aucun</option>';
+ for(let i=0;i<count;i++){let o=document.createElement('option');o.value=i;o.textContent=library[currentRecording].videos[i].name||`Caméra ${i+1}`;audioSelect.append(o)}
+ recordingDuration=players[0].getDuration()||0;$('duration').textContent=fmt(recordingDuration);$('seek').max=Math.max(1,Math.floor(recordingDuration));
+  const fullscreenSeek=grid.querySelector('.fullscreen-controls [data-seek]');
+  if(fullscreenSeek){fullscreenSeek.disabled=false;fullscreenSeek.max=Math.max(1,Math.floor(recordingDuration));}
+  updateFullscreenTimeline(0,recordingDuration);
+ say(`${count} vidéo(s) prête(s). Clique sur Démarrer.`,'good');
+}
+function applyAudio(){players.forEach((p,i)=>{if(!p)return;if(i===audio){p.unMute();p.setVolume(100);$(`sound-${i}`).textContent='● SON'}else{p.mute();$(`sound-${i}`).textContent=''}});audioSelect.value=String(audio)}
+function playAll(){if(!players.length||ready!==players.length)return;players.forEach(p=>{p.mute();p.playVideo()});applyAudio();say('Demande de lecture envoyée à toutes les vidéos.','good');startSync()}
+function pauseAll(){players.forEach(p=>p&&p.pauseVideo());say('Pause générale.');stopSync()}
+function stopAll(){players.forEach(p=>p&&p.stopVideo());say('Lecture arrêtée.');stopSync();$('seek').value=0;$('current').textContent='00:00:00';updateFullscreenTimeline(0,recordingDuration)}
+function seekAll(t){players.forEach(p=>p&&p.seekTo(Math.max(0,t),true));$('current').textContent=fmt(t);updateFullscreenTimeline(t,recordingDuration)}
+function startSync(){stopSync();syncTimer=setInterval(()=>{
+ if(!players[0]||players[0].getPlayerState()!==YT.PlayerState.PLAYING)return;
+ const master=players[0].getCurrentTime(),d=players[0].getDuration()||0;
+ if(d>0&&d!==Number($('seek').max)){$('seek').max=Math.floor(d);$('duration').textContent=fmt(d)}
+ if(!seeking){$('current').textContent=fmt(master);$('seek').value=Math.floor(master)}
+  updateFullscreenTimeline(master,d||recordingDuration);
+ for(let i=1;i<players.length;i++){const p=players[i];if(p&&p.getPlayerState()===YT.PlayerState.PLAYING&&Math.abs(p.getCurrentTime()-master)>1.5)p.seekTo(master,true)}
+ },2500)}
+function stopSync(){if(syncTimer){clearInterval(syncTimer);syncTimer=null}}
+function selectRecording(index){if(index<0||index>=library.length)return;currentRecording=index;renderRecordingMenu();showMosaic();createPlayers()}
+async function loadPublished(){
+ say('Lecture de videos.json…');
+ try{const response=await fetch(API_URL+'?v='+Date.now(),{cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);const data=await response.json();library=normalizeLibrary(data);currentRecording=library.length?0:-1;renderRecordingMenu();if(library.length)selectRecording(0);else{destroyPlayers();showEmpty('Aucun enregistrement publié.')}say(`${library.length} enregistrement(s) chargé(s).`,'good')}
+ catch(e){say('Impossible de charger videos.json. Vérifie que le fichier est publié à côté de index.html.','bad');renderRecordingMenu();showEmpty('Bibliothèque indisponible.')}
+}
+$('recordingSelect').onchange=()=>selectRecording(Number($('recordingSelect').value));
+$('start').onclick=playAll;$('pause').onclick=pauseAll;$('stop').onclick=stopAll;$('mosaic').onclick=showMosaic;
+$('fullscreenMosaic').onclick=async()=>{
+ if(!document.fullscreenElement){showMosaic();ensureFullscreenControls();try{await grid.requestFullscreen()}catch(e){say('Le plein écran n’est pas disponible sur ce navigateur.','bad')}}
+ else if(document.fullscreenElement===grid){await document.exitFullscreen()}
+};
+function updateFullscreenButton(){const active=document.fullscreenElement===grid;$('fullscreenMosaic').textContent=active?'⛶ Quitter le plein écran':'⛶ Plein écran mosaïque';}
+// Calcule la meilleure grille (colonnes × lignes) pour que les vidéos 16/9 soient les plus grandes possible à l'écran
+function layoutFullscreen(){
+ const vars=['--fs-cols','--fs-w','--fs-vh','--fs-pad','--fs-gap'];
+ if(document.fullscreenElement!==grid){vars.forEach(v=>grid.style.removeProperty(v));return}
+ const tiles=[...grid.querySelectorAll('.tile')].filter(t=>getComputedStyle(t).display!=='none');
+ const n=tiles.length;if(!n)return;
+ const pad=n===1?0:10,gap=n===1?0:8;
+ const head=tiles[0].querySelector('.tilehead')?.offsetHeight||36,border=4;
+ const barHeight=86;const W=window.innerWidth-pad*2,H=window.innerHeight-pad*2-barHeight;
+ let best={cols:1,w:0};
+ for(let cols=1;cols<=n;cols++){
+  const rows=Math.ceil(n/cols);
+  const cellW=(W-gap*(cols-1))/cols-border,cellH=(H-gap*(rows-1))/rows-head-border;
+  const w=Math.min(cellW,cellH*16/9);
+  if(w>best.w)best={cols,w};
+ }
+ const w=Math.max(80,Math.floor(best.w));
+ grid.style.setProperty('--fs-pad',pad+'px');grid.style.setProperty('--fs-gap',gap+'px');
+ grid.style.setProperty('--fs-cols',best.cols);
+ grid.style.setProperty('--fs-w',(w+border)+'px');
+ grid.style.setProperty('--fs-vh',Math.floor(w*9/16)+'px');
+}
+document.addEventListener('fullscreenchange',()=>{updateFullscreenButton();requestAnimationFrame(layoutFullscreen)});
+window.addEventListener('resize',()=>requestAnimationFrame(layoutFullscreen));
+audioSelect.onchange=()=>{audio=Number(audioSelect.value);applyAudio()};
+$('seek').oninput=()=>{seeking=true;$('current').textContent=fmt($('seek').value)};
+$('seek').onchange=()=>{seekAll(Number($('seek').value));seeking=false};
+$('back').onclick=()=>seekAll((players[0]?.getCurrentTime()||0)-5);
+$('forward').onclick=()=>seekAll((players[0]?.getCurrentTime()||0)+5);
+window.onYouTubeIframeAPIReady=()=>{apiReady=true;loadPublished()};
+window.addEventListener('beforeunload',stopSync);
+const script=document.createElement('script');script.src='https://www.youtube.com/iframe_api';document.head.append(script);
+</script>
+</body></html>
